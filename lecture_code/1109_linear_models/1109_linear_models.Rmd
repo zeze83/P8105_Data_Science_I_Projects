@@ -1,0 +1,235 @@
+---
+title: "1109_linear_models"
+author: "Ze Li"
+date: "2023-11-09"
+output: github_document
+---
+
+```{r, include = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+Load key packages.
+
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+```
+
+## Load and clean the Airbnb data
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  select(
+    price, stars, borough = neighbourhood_group, 
+    neighbourhood, room_type) |> 
+  filter(borough != "Staten Island")
+
+```
+
+
+Let's fit a model!!
+
+```{r}
+fit = 
+  nyc_airbnb |> 
+  lm(price ~ stars + borough, data = _)
+```
+
+
+Let's look at the `fit`
+
+```{r}
+fit
+summary(fit)
+summary(fit)$coef
+coef(fit)
+# fitted.values(fit)
+```
+
+tidy up the output instead
+
+```{r}
+fit |> 
+  broom::glance()
+```
+
+
+tidy up the coefficients
+
+```{r}
+fit |> 
+  broom::tidy() |> 
+  mutate(term = str_replace(term, "^borough", "Borough: ")) |> 
+  select(term, estimate, p.value) |> 
+  knitr::kable(digits = 3)
+```
+
+## Fit another model
+
+
+```{r}
+fit = 
+  nyc_airbnb |> 
+  mutate(
+    borough = fct_infreq(borough),
+    room_type = fct_infreq(room_type)
+  ) |> 
+  lm(price ~ stars + borough + room_type, data = _)
+
+fit |> 
+  broom::tidy()
+```
+
+
+## Quick look at diagnostics
+
+```{r}
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = borough, y = resid)) + 
+  geom_violin() 
+
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = stars, y = resid)) + 
+  geom_point() 
+
+```
+
+
+## Hypothesis test for categorical predictor
+
+fit a "null" and "alternative" model
+
+```{r}
+fit_null = lm(price ~ stars + borough, data = nyc_airbnb)
+fit_alternative = lm(price ~ stars + borough + room_type, data = nyc_airbnb)
+
+anova(fit_null, fit_alternative) |> 
+  broom::tidy()
+
+```
+
+
+
+## Borough-level differences
+
+```{r}
+fit = 
+  nyc_airbnb |> 
+  lm(price ~ stars * borough + room_type * borough, data = _)
+
+fit |> 
+  broom::tidy()
+```
+
+
+
+```{r}
+airbnb_lm = function(df) {
+  lm(price ~ stars + room_type, data = df)
+}
+
+nyc_airbnb |> 
+  nest(df = -borough) |> 
+  mutate(
+    models = map(df, airbnb_lm),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(borough, results) |> 
+  unnest(results) |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  knitr::kable(digits = 2)
+
+
+```
+
+same thing but just a little different
+
+
+```{r}
+nyc_airbnb |> 
+  nest(df = -borough) |> 
+  mutate(
+    models = map(df, \(df) lm(price ~ stars + room_type, data = df)),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(borough, results) |> 
+  unnest(results) |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  knitr::kable(digits = 2)
+```
+
+
+
+## Homicides in Baltimore
+
+```{r}
+baltimore_df = 
+  read_csv("data/homicide-data.csv") |> 
+  filter(city == "Baltimore") |> 
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"),
+    victim_age = as.numeric(victim_age)
+  ) |> 
+  select(resolved, victim_age, victim_race, victim_sex)
+```
+
+
+fitting a logistic regression
+
+```{r}
+fit_logistic = 
+  baltimore_df |> 
+  glm(
+    resolved ~ victim_age + victim_race + victim_sex, 
+    data = _, 
+    family = binomial())
+```
+
+look at model results
+
+```{r}
+fit_logistic |> 
+  broom::tidy() |> 
+  mutate(OR = exp(estimate)) |> 
+  select(term, estimate, OR)
+```
+
+
+```{r}
+baltimore_df |> 
+  count(victim_race)
+
+```

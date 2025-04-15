@@ -1,0 +1,120 @@
+---
+title: "p8105_hw1_zl2746"
+author: "Ze Li"
+date: "2023-09-15"
+output: github_document
+---
+
+
+```{r library, message = FALSE}
+#install.packages("moderndive")
+library(moderndive)
+library(tidyverse)
+```
+
+
+# Problem 1
+
+```{r data description}
+data("early_january_weather")
+summary(early_january_weather)
+nrow(early_january_weather)
+ncol(early_january_weather)
+```
+
+There are 15 variables in `early_january_weather` dataset.
+
+There are 4 time variables: year, month, day and hour. 
+
+The year variable is 2013 and all data is happened in this year. 
+
+The month variable is 1 which means all data is happened in Jan 2013.
+
+The day variable has min value 1 and max value 15, which means that
+the dataset only has 15 days in 2013.
+
+The hour variable has min value 0 and max value 23, which means that 
+it measures 23 hours in a day.
+
+The other 11 variables are factors of weather.
+
+The temperature variable ranged from 24.08 to 57.92, having a mean of 39.58.
+
+The dewp variable ranged from 8.96 to 53.06.
+
+The humid variable ranged from 32.86 to 100.
+
+The wind_direction variable ranged from 0 to 360, having 5 null values.
+
+The wind_speed variable ranged from 0 to 24.166.
+
+The wind_gust variable ranged from 16.11 to 31.07, having 308 null values.
+
+The precip variable ranged from 0 to 0.19.
+
+The pressure variable ranged from 1011 to 1034, having 38 null values.
+
+The visible variable ranged from 0.12 to 10.
+
+The time_hour variable ranged from 2013-01-01 01:00:00.00 to 2013-01-15 23:00:00.00.
+
+The dataset has 358 rows and 15 columns.
+
+Next, making a scatterplot of `temp (y)` vs `time_hour (x)`.
+
+```{r scatterplot}
+ggplot(early_january_weather, 
+       aes(x=temp, y=time_hour, color = humid,
+           xlab = 'temperature'), ylab = 'time hour') + geom_point()
+ggsave('temp_vs_timehour_by_humid.pdf')
+```
+
+In the first 10 days, there is low temperature below around 50, and humid is below
+around 60. 
+
+During day 10 to day 14, the temperature gradually increase to the maximum 
+around 60 and humid increases to 100 as color becomes lighter. 
+
+In the last day,
+the temperature decreases suddenly to 40.
+
+# Problem 2
+
+```{r df}
+problem2_df=
+  tibble(
+    samp=rnorm(10,sd = 1),
+    vec_logical = samp>0,
+    vec_char = c('book','mac','bag','ipad','phone','coffee','hat','water','mouse','pen'),
+    vec_factor = c('low','medium','high','low','medium','high','low','medium','high','low')
+)    
+problem2_df
+```
+
+Using `as.numeric` function,
+
+```{r mean}
+as.numeric(problem2_df$samp)
+as.numeric(problem2_df$vec_logical)
+as.numeric(problem2_df$vec_char)
+as.numeric(problem2_df$vec_factor)
+mean(problem2_df$samp)
+mean(problem2_df$vec_logical)
+mean(problem2_df$vec_char)
+mean(problem2_df$vec_factor)
+```
+
+Using `pull` function,
+
+```{r pull}
+mean(problem2_df %>% pull(samp))
+mean(problem2_df %>% pull(vec_logical))
+mean(problem2_df %>% pull(vec_char))
+mean(problem2_df %>% pull(vec_factor))
+```
+
+The normal distribution and logical vector have mean of 0.0496 and 0.5,
+since the logical vector is transfer into 0 and 1.
+
+However, character vector and factor vector don't work to take mean.
+Both of them are transferred into NA.

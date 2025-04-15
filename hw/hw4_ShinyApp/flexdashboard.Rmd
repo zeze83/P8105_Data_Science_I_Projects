@@ -1,0 +1,79 @@
+---
+title: "Flexdashboard for NYC Restuarant Inspections"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+
+library(tidyverse)
+library(plotly)
+library(p8105.datasets)
+
+data(rest_inspec)
+
+NYC_food =
+  rest_inspec |> 
+  select(boro, score,cuisine_description, grade, zipcode) |> 
+  drop_na(score) |> 
+  drop_na(grade) |>
+  mutate(boro = ifelse(boro == 'Missing', NA, boro)) |> 
+  drop_na(boro) 
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+NYC_food |> 
+  filter(score <= 7) |>
+  plot_ly(y = ~score, color = ~boro, 
+          type = "box") |>
+  layout(
+    title = "Box plot of scores by borough",
+    yaxis = list(title = "Scores"),
+    xaxis = list(title = "Borough")
+  )
+```
+
+Column {data-width=500}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+NYC_food |> 
+  filter(boro == "MANHATTAN") |>
+  mutate(text_label = str_c("Grade: $", grade, "\nScore: ", score)) |> #\n: line break
+  plot_ly(x = ~cuisine_description, y = ~score, color = ~zipcode, text = ~text_label,
+          type = "scatter", mode = "markers") |>
+  layout(
+    title = "Scatter plot of score by cuisine across zipcode",
+    yaxis = list(title = "Scores"),
+    xaxis = list(title = "Cuisine")
+  )
+```
+
+### Chart C
+
+```{r bar}
+NYC_food |>
+  select(cuisine_description, boro) |>
+  group_by(cuisine_description) |>
+  summarise(n = n()) |>
+  filter(n > 5000) |> 
+  mutate(cuisine_description = fct_reorder(cuisine_description, n)) |>
+  plot_ly(x = ~cuisine_description, y = ~n, color = ~cuisine_description,
+          type = "bar", colors = "viridis") |>
+  layout(
+    title = "Bar plot of number by cuisine styles",
+    yaxis = list(title = "Number"),
+    xaxis = list(title = "Cuisine Styles")
+  )
+```
+

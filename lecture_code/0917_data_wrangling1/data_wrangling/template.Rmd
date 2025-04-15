@@ -1,0 +1,145 @@
+---
+title: "Simple document"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+library(readr)
+library(readxl)
+library(haven)
+```
+
+Let's import the `FAS_litters.csv` csv.
+
+```{r litters}
+litters_df=
+  read_csv("data/FAS_litters.csv")
+names(litters_df)
+
+litters_df=
+  janitor::clean_names(litters_df)
+names(litters_df)
+```
+
+Import the same dataset using an absolute path.
+
+```{r litters abs}
+litters_df_abs=
+  read_csv("~/Users/zeze/Desktop/2023/23F BIST P8105/data_wrangling I/data_wrangling/data/FAS_litters.csv")
+
+litters_df_abs=
+  janitor::clean_names(litters_df_abs)
+```
+
+```{r pups}
+pups_df=
+  read_csv("./data/FAS_pups.csv")
+
+pups_df=
+  janitor::clean_names(pups_df)
+```
+
+
+
+# Look at data
+
+```{r head tail}
+litters_df
+
+head(litters_df)
+
+tail(litters_df)
+```
+
+You can use `view`.
+
+```{r view, eval = FALSE}
+view(litters_df)
+```
+
+Look at a data summary
+
+```{r}
+str(litters_df)
+
+skimr::skim(litters_df)
+```
+
+
+
+## Options in read_*
+
+```{r}
+litters_df = 
+  read_csv(
+    "data/FAS_litters.csv",
+    skip = 10, # skip 10 rows
+    col_names = FALSE # don't recognize the 1st row as names
+  )
+```
+
+```{r}
+litters_df = 
+  read_csv(
+    "data/FAS_litters.csv",
+    na = c("NA", 19, ".") # recognize this string as null
+  )
+```
+
+
+## Column types
+
+```{r}
+litters_df = 
+  read_csv(
+    "data/FAS_litters.csv",
+    col_types = 
+      cols(
+        Group = col_factor(), # change the Group column from chr to fct
+        `GD0 weight` = col_character() # change that column from dbl to chr
+      ))
+```
+
+
+
+## Other file types
+
+Import a xlsx file first
+
+```{r}
+#library(readxl)
+mlb_df = 
+  read_excel("data/mlb11.xlsx")
+```
+
+Import a SAS file
+
+```{r}
+#library(haven)
+pulse_df =
+  read_sas("data/public_pulse_data.sas7bdat")
+```
+
+## Base R
+
+```{r, eval = FALSE}
+litters_df =
+    read_csv("data/FAS_litters.csv")
+
+litters_df$Group
+```
+
+## Exporting data
+
+```{r}
+litters_df_cleaned =
+    read_csv("data/FAS_litters.csv")
+
+litters_df_cleaned =
+    janitor::clean_names(litters_df_cleaned)
+
+write_csv(litters_df_cleaned,"data/litters_cleaned.csv")
+```
+
+

@@ -1,0 +1,255 @@
+---
+title: "p8105_hw5_zl2746"
+author: "Ze Li"
+date: "2023-11-08"
+output: github_document
+---
+
+```{r, include = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(rvest)
+library(ggplot2)
+library(broom)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Problem 1
+
+```{r}
+homicide_df = read.csv("data/homicide-data.csv")
+```
+
+* Describe the raw data.
+  
+  There are `r nrow(homicide_df)` observations with `r ncol(homicide_df)` variables in this data set. The variables are `r colnames(homicide_df)`.
+  
+* Create a city_state variable (e.g. “Baltimore, MD”) and 
+* then summarize within cities to obtain the total number of homicides and the number of unsolved homicides (those for which the disposition is “Closed without arrest” or “Open/No arrest”).
+
+```{r}
+homicide1 = 
+  homicide_df |>
+  unite(city_state,c(city,state),sep = ', ')
+
+city_summary <- 
+  homicide1 |>
+  group_by(city_state) |>
+  summarize(
+    total_homicides = n(),
+    unsolved_homicides = sum(disposition %in% c("Closed without arrest", "Open/No arrest"))
+  )
+city_summary
+```
+
+* For the city of Baltimore, MD, use the prop.test function to estimate the proportion of homicides that are unsolved; save the output of prop.test as an R object, apply the broom::tidy to this object and pull the estimated proportion and confidence intervals from the resulting tidy dataframe.
+
+```{r}
+baltimore_data = filter(homicide1, city_state == "Baltimore, MD")
+baltimore_test = prop.test(x = sum(baltimore_data$Disposition %in% c("Closed without arrest", "Open/No arrest")),
+                            n = nrow(baltimore_data))
+baltimore_tidy = tidy(baltimore_test)
+baltimore_test
+baltimore_tidy
+```
+
+* Now run prop.test for each of the cities in your dataset, and extract both the proportion of unsolved homicides and the confidence interval for each. Do this within a “tidy” pipeline, making use of purrr::map, purrr::map2, list columns and unnest as necessary to create a tidy dataframe with estimated proportions and CIs for each city.
+
+```{r}
+prop_test_results =
+  city_summary |>
+  mutate(test_result = map2(unsolved_homicides, total_homicides, ~prop.test(x = .x, n = .y))) |>
+  mutate(tidy_result = map(test_result, tidy)) |>
+  unnest(tidy_result)
+prop_test_results
+```
+
+* Create a plot that shows the estimates and CIs for each city – check out geom_errorbar for a way to add error bars based on the upper and lower limits. Organize cities according to the proportion of unsolved homicides.
+
+```{r}
+prop_test_results |>
+  ggplot(aes(x = reorder(city_state, estimate), y = estimate)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)) +
+  coord_flip() +
+  labs(title = "Proportion of Unsolved Homicides by City",
+       x = "City",
+       y = "Proportion of Unsolved Homicides")
+```
+
+
+
+## Problem 2
+
+* Create a tidy dataframe containing data from all participants, including the subject ID, arm, and observations over time:
+  * Start with a dataframe containing all file names; the list.files function will help
+  * Iterate over file names and read in data for each subject using purrr::map and saving the result as a new variable in the dataframe
+  *Tidy the result; manipulate file names to include control arm and subject ID, make sure weekly observations are “tidy”
+  
+```{r}
+fulldata = 
+  tibble(
+    filename = list.files("./data2", pattern = ".csv"),
+    path = str_c("./data2/",filename)
+  ) |>
+  mutate(data = map(path, ~read_csv(.x))) |>
+  unnest() |>
+  select(starts_with("week"))
+
+filename = list.files("./data2", pattern = ".csv")
+subject_id = str_extract(basename(filename), "\\d+") 
+arm = ifelse(str_detect(basename(filename), "con"), "Control", "Experimental")
+subjectinfo = tibble(SubjectID = subject_id,Arm = arm)
+combinedata = bind_cols(subjectinfo,fulldata)
+combinedata
+
+combined_data1 = 
+  combinedata |>
+  pivot_longer(
+    week_1:week_8, 
+    names_to = "week",
+    values_to = "observations_over_time"
+  )
+combined_data1
+```
+
+* Make a spaghetti plot showing observations on each subject over time, and comment on differences between groups.
+
+```{r}
+spaghetti_plot =
+  ggplot(combined_data1, 
+         aes(x = week, 
+             y = observations_over_time, 
+             group = SubjectID, 
+             color = Arm)) +
+  geom_line() +
+  theme_minimal() +
+  facet_grid(. ~ Arm) +
+  labs(title = "Spaghetti Plot of Observations Over Time",
+       x = "Time",
+       y = "Measurement",
+       color = "Subject ID")
+
+spaghetti_plot
+ggsave("spaghetti_plot.jpg",width = 10, height = 5)
+```
+
+The spaghetti plot displays two groups: Control (purple) has more stable and consistent measurements, and Experimental (yellow) has wider variance and a small increasing trends over time. 
+
+
+
+## Problem 3
+
+* Set μ=0. Generate 5000 datasets from the normal distribution.
+
+* For each dataset, save μ̂ and the p-value arising from a test of H:μ=0 using α=0.05. Hint: to obtain the estimate and p-value, use broom::tidy to clean the output of t.test
+
+```{r}
+set.seed(12345)
+
+sim_t_test = function(mu = mu) {
+  
+  x_vec = rnorm(n = 30, mean = mu, sd = 5)
+  t_result <- t.test(x_vec, alternative = "two.sided", conf.level = 0.95)
+  tidy(t_result)
+  
+}
+
+output = vector("list", length = 5000)
+
+for (i in 1:5000) {
+  
+  output[[i]] = sim_t_test(mu = 0)
+  
+}
+
+mu0_results = 
+  bind_rows(output)
+```
+
+* Repeat the above for μ={1,2,3,4,5,6}
+  * Make a plot showing the proportion of times the null was rejected (the power of the test) on the y axis and the true value of μ on the x axis. Describe the association between effect size and power.
+
+```{r}
+sim_result_df =
+  expand_grid(
+    mu = 0:6,
+    iter = 1:5000
+  ) |> 
+  mutate(estimate_df = map(mu, ~sim_t_test(.x))) |> 
+  unnest(estimate_df)
+sim_result_df
+
+power_df =
+  sim_result_df |>
+  group_by(mu) |>
+  summarize(power = mean(p.value < 0.05)) |>
+  ggplot(aes(x = mu,y = power)) +
+  geom_path() +
+  geom_smooth() +
+  labs(title = "Power of the Test vs. True Value of mu",
+       x = "True Value of mu",
+       y = "Power of the Test") +
+  theme_minimal()
+power_df
+
+ggsave("Power of the Test vs. True Value of mu.jpg")
+```
+
+The power increases when the effect size of $\mu$ increases. And the probability of rejection is close to 0.05 as the significant level we choose.
+
+  * Make a plot showing the average estimate of μ̂ on the y axis and the true value of μ on the x axis. 
+  * Make a second plot (or overlay on the first) the average estimate of μ̂ only in samples for which the null was rejected on the y axis and the true value of μ on the x axis. Is the sample average of μ̂ across tests for which the null is rejected approximately equal to the true value of μ? Why or why not?
+  
+```{r}
+avg_estimates = 
+  sim_result_df |>
+  group_by(mu) |>
+  summarize(avg_mu_hat_all = mean(estimate), 
+            avg_mu_hat_rejected = mean(estimate[p.value < 0.05]))
+avg_estimates
+
+avg_estimate_plot = 
+  avg_estimates |>
+  ggplot(aes(x = mu)) +
+  geom_line(aes(y = avg_mu_hat_all), color = "blue") +
+  geom_line(aes(y = avg_mu_hat_rejected), color = "red") +
+  labs(title = "Average Estimates of muhat vs True Value of mu",
+       x = "True Value of mu",
+       y = "Average Estimate of muhat") +
+  scale_color_manual(values = c("blue", "red")) +
+  theme_minimal()
+avg_estimate_plot
+
+ggsave("The average estimates plot.jpg")
+```
+
+The average estimates plot shows that the average estimate of μ is approximately equal to the true value of μ. However, the average estimate of μ̂ only in samples for which the null was rejected have some difference with the true value of μ.
+
+The following distribution of μ shows some reason for this difference. Since smaller effect sizes, there is a lower power since fewer tests will result in rejection.
+
+```{r}
+# Distribution of mu
+sim_result_df |>
+  ggplot(aes(x = estimate))+ 
+  geom_histogram() +
+  facet_grid(p.value < 0.05 ~ mu)
+```
+
+

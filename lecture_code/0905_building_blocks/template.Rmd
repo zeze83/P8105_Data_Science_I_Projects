@@ -1,0 +1,133 @@
+---
+title: "Simple document"
+author: "Ze Li"
+date: "2023-09-12"
+output: 
+  html_document: 
+   toc: true
+   toc_float: true
+   code_folding: hide
+---
+
+```{r library, echo = FALSE, message = FALSE}
+library(tidyverse)
+# echo=FALSE hide this code chunk
+# message = FALSE hide result of code chunk
+# eval = FALSE show code but not run it
+```
+
+
+I'm an R Markdown document! 
+
+# Section 1 First code chunk
+
+Here's a **code chunk** that samples from 
+a _normal distribution_:
+
+```{r samp norm}
+samp = rnorm(100)
+length(samp)
+```
+
+The mean of the sample is `r round(mean(samp), digits = 4)`
+
+# Section 2 Make a plot
+
+I can take the mean of the sample, too!
+The mean is `r mean(samp)`.
+
+This code is borrowed from last lecture; it creates a dataframe for plotting.
+
+```{r df}
+plot_df = 
+  tibble(
+    x = rnorm(1000,sd=0.5),
+    y = 1 + 2*x + rnorm(1000)
+  )
+```
+
+Next up is a histogram of the `x` variable in `plot_df`.
+
+```{r hist}
+ggplot(plot_df, aes(x=x)) + geom_histogram()
+```
+
+Lastly, I'll do a scatter plot.
+
+```{r scatter}
+ggplot(plot_df, aes(x=x,y=y)) + geom_point()
+```
+
+here's a list:
+
+* this is the first list thing
+* here's another list item
+
+# Section 3: Learning assessment
+
+Write a named code chunk that creates a dataframe comprised of: a numeric variable containing a random sample of size 500 from a normal variable with mean 1; a logical vector indicating whether each sampled value is greater than zero; and a numeric vector containing the absolute value of each element. 
+
+Then, produce a histogram of the absolute value variable just created. Add an inline summary giving the median value rounded to two decimal places. What happens if you set eval = FALSE to the code chunk? What about echo = FALSE?
+
+```{r la_df}
+la_df = 
+  tibble(
+    num_samp = rnorm(500,mean = 1),
+    log_vec = num_samp > 0,
+    absnum_vec = abs(rnorm(500,mean = 1))
+  )
+ggplot(la_df, aes(x=absnum_vec)) + geom_histogram()
+```
+
+# Section 4: Text formatting examples
+
+Text formatting 
+------------------------------------------------------------
+
+*italic*  or  _italic_
+**bold**  or  __bold__
+`code`
+superscript^2^ and subscript~2~
+
+
+Headings
+------------------------------------------------------------
+
+# 1st Level Header
+
+## 2nd Level Header
+
+### 3rd Level Header
+
+
+Lists
+------------------------------------------------------------
+
+*   Bulleted list item 1
+
+*   Item 2
+
+    * Item 2a
+
+    * Item 2b
+
+1.  Numbered list item 1
+
+1.  Item 2. The numbers are incremented automatically in the output.
+
+
+Tables 
+------------------------------------------------------------
+
+First Header  | Second Header
+------------- | -------------
+Content Cell  | Content Cell
+Content Cell  | Content Cell
+
+# Section 5: New Workflow
+```{r}
+# output: word_document
+# output: pdf_document
+# output: github_document
+```
+

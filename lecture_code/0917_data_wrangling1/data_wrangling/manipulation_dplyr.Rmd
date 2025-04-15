@@ -1,0 +1,154 @@
+---
+title: "dplyr"
+author: "Ze Li"
+date: "2023-09-21"
+output: github_document
+---
+
+# Data manipulation
+
+```{r}
+library(tidyverse)
+library(readr)
+```
+
+Import FAS litters and pups.
+
+```{r}
+litters_df = 
+  read_csv("data/FAS_litters.csv")
+litters_df = janitor::clean_names(litters_df)
+
+pups_df = 
+  read_csv("data/FAS_pups.csv")
+pups_df = janitor::clean_names(pups_df)
+```
+
+## `select`
+
+`select` is used to select columns!
+
+```{r}
+select(litters_df, group, litter_number, gd0_weight)
+
+select(litters_df, gd0_weight, group)
+
+select(litters_df, group, gd0_weight:gd_of_birth) # skip between gd0_weight & gd_of_birth
+
+select(litters_df, group, starts_with("pups"))
+
+select(litters_df, -litter_number)
+
+select(litters_df, -starts_with("gd"))
+
+select(litters_df, group, litter_id = litter_number)
+
+select(litters_df, group, litter_id = litter_number, everything())
+
+select(litters_df, gd0_weight, everything())
+```
+
+# rename & relocate
+
+```{r}
+rename(litters_df, litter_id = litter_number)
+
+relocate(litters_df, litter_number)
+```
+
+
+`select` vs `pull`
+
+```{r}
+select(litters_df, group)
+pull(litters_df, group)
+```
+
+practice:
+
+```{r}
+select(pups_df, litter_number, sex, pd_ears)
+```
+
+
+
+## `filter`
+
+`filter()` is used to get rid of rows.
+
+```{r}
+filter(litters_df, group == "Con7")
+
+filter(litters_df, group == "Mod8")
+
+filter(litters_df, group != "Con7")
+
+filter(litters_df, gd0_weight > 20)
+
+filter(litters_df, gd0_weight <= 20)
+
+filter(litters_df, group == "Con7" | group == "Con8")
+
+filter(litters_df, group %in% c("Con7", "Con8"))
+
+filter(litters_df, !(group == "Con7"))
+
+filter(litters_df, group %in% c("Con7", "Con8"), gd0_weight > 20)
+```
+
+What about missing rows?
+
+```{r}
+drop_na(litters_df)
+drop_na(litters_df, gd0_weight)
+```
+
+
+## `mutate`
+
+`mutate()` is used to add or change variables.
+
+```{r}
+view(mutate(litters_df, wt_gain = gd18_weight - gd0_weight))
+
+mutate(litters_df, group = str_to_lower(group))
+
+mutate(litters_df, 
+       wt_gain = gd18_weight - gd0_weight,
+       group = str_to_lower(group))
+```
+
+
+
+## `arrange`
+
+`arrange()` is sort variables; arrange the rows in your data according to the values in one or more columns.
+
+```{r}
+arrange(litters_df, gd0_weight)
+arrange(litters_df, group, gd0_weight)
+```
+
+
+
+## pipes
+
+`%>%` or `|>`
+
+1) define intermediate datasets (or overwrite data at each stage)
+
+2) nest function calls
+
+```{r}
+litters_df =
+  read_csv("data/FAS_litters.csv") |>
+  janitor::clean_names() |>
+  select(-starts_with("pups")) |>
+  mutate(
+    group = str_to_lower(group),
+    wt_gain = gd18_weight - gd0_weight
+  ) |>
+  drop_na(wt_gain) |>
+  arrange(group, wt_gain)
+```
+

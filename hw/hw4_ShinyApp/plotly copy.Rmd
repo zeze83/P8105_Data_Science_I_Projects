@@ -1,0 +1,107 @@
+---
+title: "Plotly"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+# Plotly - We are making interactive plots
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(plotly)
+
+library(p8105.datasets)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+Create a flexdashboard using plotly for that includes at least three distinct plot types (e.g. scatterplots, line plots, bar plots, box plots, etc.)
+
+```{r}
+data(rest_inspec)
+
+NYC_food =
+  rest_inspec |> 
+  select(boro, score,cuisine_description, grade, zipcode) |> 
+  drop_na(score) |> 
+  drop_na(grade) |>
+  mutate(boro = ifelse(boro == 'Missing', NA, boro)) |> 
+  drop_na(boro) 
+```
+
+## Make a scatterplot!
+
+```{r}
+NYC_food |> 
+  filter(boro == "MANHATTAN") |>
+  mutate(text_label = str_c("Grade: $", grade, "\nScore: ", score)) |> #\n: line break
+  plot_ly(x = ~cuisine_description, y = ~score, color = ~zipcode, text = ~text_label,
+          type = "scatter", mode = "markers") |>
+  layout(
+    title = "Scatter plot of score by cuisine across zipcode",
+    yaxis = list(title = "Scores"),
+    xaxis = list(title = "Cuisine")
+  )
+```
+
+## Make a boxplot!
+
+```{r borough}
+NYC_food |> 
+  plot_ly(y = ~score, color = ~boro, 
+          type = "box") |>
+  layout(
+    title = "Box plot of scores by borough",
+    yaxis = list(title = "Scores"),
+    xaxis = list(title = "Borough")
+  )
+```
+
+```{r cuisine}
+NYC_food |> 
+  plot_ly(y = ~score, color = ~cuisine_description, 
+          type = "box") |>
+  layout(
+    title = "Box plot of scores by cuisine",
+    yaxis = list(title = "Scores"),
+    xaxis = list(title = "cuisine")
+  )
+```
+
+## Make a barplot!
+
+```{r}
+NYC_food |>
+  select(cuisine_description, boro) |>
+  group_by(cuisine_description) |>
+  summarise(n = n()) |>
+  filter(n > 5000) |> 
+  mutate(cuisine_description = ifelse(cuisine_description == "Latin (Cuban, Dominican, Puerto Rican, South & Central American)", "Latin",cuisine_description),
+         cuisine_description = fct_reorder(cuisine_description, n)) |>
+  plot_ly(x = ~cuisine_description, y = ~n, color = ~cuisine_description,
+          type = "bar", colors = "viridis") |>
+  layout(
+    title = "Bar plot of number of cuisine styles",
+    yaxis = list(title = "Number"),
+    xaxis = list(title = "Cuisine Styles")
+  )
+```

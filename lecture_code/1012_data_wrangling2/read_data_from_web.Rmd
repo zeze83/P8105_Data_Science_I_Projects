@@ -1,0 +1,116 @@
+---
+title: "read_data_from_web"
+author: "Ze Li"
+date: "2023-10-12"
+output: github_document
+---
+
+```{r, include = FALSE, message = FALSE, warning=FALSE}
+library(tidyverse)
+library(ggridges)
+
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Load necessary libraries
+
+```{r setup}
+library(rvest)
+library(httr)
+```
+
+## Extracting tables
+
+### Import NSDUH data
+
+```{r}
+nsduh_url = "http://samhda.s3-us-gov-west-1.amazonaws.com/s3fs-public/field-uploads/2k15StateFiles/NSDUHsaeShortTermCHG2015.htm"
+drug_use_html = read_html(nsduh_url)
+drug_use_html
+
+drug_use_html |>
+  html_table() #imports all 15 tables from the web
+```
+
+```{r the first table}
+marj_use_df =
+  drug_use_html |> 
+  html_table() |> 
+  first() |> # first element in a list
+  slice(-1) #remove the first row
+```
+
+## CSS selectors
+
+### Import star wars 
+
+```{r}
+swm_url = 
+  "https://www.imdb.com/list/ls070150896/"
+
+swm_html = 
+  read_html(swm_url)
+```
+
+```{r}
+swm_title_vec = 
+  swm_html |> 
+  html_elements(".lister-item-header a") |> 
+  html_text()
+
+swm_gross_rev_vec = 
+  swm_html |> 
+  html_elements(".text-small:nth-child(7) span:nth-child(5)") |> 
+  html_text()
+
+swm_df = 
+  tibble(
+    title = swm_title_vec,
+    gross_rev = swm_gross_rev_vec
+  )
+```
+
+
+## APIs
+
+Get water data from NYC.
+
+```{r}
+nyc_water_df = 
+  GET("https://data.cityofnewyork.us/resource/ia2d-e54m.csv") |> 
+  content()
+```
+
+BRFSS Data
+
+```{r}
+brfss_df = 
+  GET(
+    "https://data.cdc.gov/resource/acme-vg9e.csv",
+    query = list("$limit" = 5000)) |> 
+  content() #content("parsed")
+```
+
+Try it now!
+
+```{r}
+poke_df = 
+  GET("https://pokeapi.co/api/v2/pokemon/ditto") |> 
+  content()
+```

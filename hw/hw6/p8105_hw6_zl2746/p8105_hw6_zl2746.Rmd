@@ -1,0 +1,363 @@
+---
+title: "p8105_hw6_zl2746"
+author: "Ze Li"
+date: "2023-11-27"
+output: github_document
+---
+
+```{r, include = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(broom)
+library(modelr)
+library(purrr)
+library(stats)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+## Problem 1
+
+For the city of Baltimore, MD, use the glm function to fit a logistic regression with resolved vs unresolved as the outcome and victim age, sex and race as predictors. Save the output of glm as an R object; apply the broom::tidy to this object; and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing male victims to female victims keeping all other variables fixed.
+
+```{r q1_data_cleaning}
+# Load and clean data
+homicide_df = 
+  read_csv("homicide-data.csv", na = c("", "NA", "Unknown")) |>
+  unite(city_state,c(city,state),sep = ', ') |>
+  mutate(resolution = case_when(
+      disposition == "Closed without arrest" ~ 0,
+      disposition == "Open/No arrest"        ~ 0,
+      disposition == "Closed by arrest"      ~ 1),
+      city_state = ifelse(city_state == "Tulsa, AL", "Tulsa, OK", city_state),
+         victim_age = as.numeric(victim_age)) |>
+  filter(!city_state %in% c("Dallas, TX", "Phoenix, AZ", "Kansas City, MO", "Tulsa, OK")) |>
+  filter(victim_race %in% c("White", "Black")) |>
+  select(city_state, resolution, victim_age, victim_sex, victim_race)
+head(homicide_df)
+```
+
+Next we fit a logistic regression model using only data from Baltimore, MD. We model `resolved` as the outcome and `victim_age`, `victim_sex`, and `victim_race` as predictors. We save the output as `baltimore_glm` so that we can apply `broom::tidy` to this object and obtain the estimate and confidence interval of the adjusted odds ratio for solving homicides comparing non-white victims to white victims.
+
+```{r q1_glm_baltimore}
+baltimore_glm = 
+  filter(homicide_df, city_state == "Baltimore, MD") |> 
+  glm(resolution ~ victim_age + victim_sex + victim_race, family = binomial(), data = _)
+
+baltimore_glm |> 
+  broom::tidy() |> 
+  mutate(
+    OR = exp(estimate), 
+    OR_CI_upper = exp(estimate + 1.96 * std.error),
+    OR_CI_lower = exp(estimate - 1.96 * std.error)) |> 
+  filter(term == "victim_sexMale") |> 
+  select(OR, OR_CI_lower, OR_CI_upper) |>
+  knitr::kable(digits = 3)
+```
+
+Below, by incorporating `nest()`, `map()`, and `unnest()` into the preceding Baltimore-specific code, we fit a model for each of the cities, and extract the adjusted odds ratio (and CI) for solving homicides comparing non-white victims to white victims. We show the first 5 rows of the resulting dataframe of model results.
+
+```{r q1_glm_all_cities}
+model_results = 
+  homicide_df |> 
+  nest(data = -city_state) |> 
+  mutate(
+    models = map(data, \(df) glm(resolution ~ victim_age + victim_sex + victim_race, 
+                             family = binomial(), data = df)),
+    tidy_models = map(models, broom::tidy)) |> 
+  select(-models, -data) |> 
+  unnest(cols = tidy_models) |> 
+  mutate(
+    OR = exp(estimate), 
+    OR_CI_upper = exp(estimate + 1.96 * std.error),
+    OR_CI_lower = exp(estimate - 1.96 * std.error)) |> 
+  filter(term == "victim_sexMale") |> 
+  select(city_state, OR, OR_CI_lower, OR_CI_upper)
+
+model_results |>
+  slice(1:5) |> 
+  knitr::kable(digits = 3)
+```
+
+Below we generate a plot of the estimated ORs and CIs for each city, ordered by magnitude of the OR from smallest to largest. From this plot we see that most cities have odds ratios that are smaller than 1, suggesting that crimes with male victims have smaller odds of resolution compared to crimes with female victims after adjusting for victim age and race. This disparity is strongest in New yrok. In roughly half of these cities, confidence intervals are narrow and do not contain 1, suggesting a significant difference in resolution rates by sex after adjustment for victim age and race. 
+
+```{r q1_plot}
+model_results |> 
+  mutate(city_state = fct_reorder(city_state, OR)) |> 
+  ggplot(aes(x = city_state, y = OR)) + 
+  geom_point() + 
+  geom_errorbar(aes(ymin = OR_CI_lower, ymax = OR_CI_upper)) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Problem 2
+
+```{r q2 data cleaning}
+# Load data
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2022-01-01",
+    date_max = "2022-12-31") |>
+  mutate(
+    name = recode(id, USW00094728 = "CentralPark_NY"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) |>
+  select(name, id, everything())
+weather_df
+```
+
+Use 5000 bootstrap samples and, for each bootstrap sample, produce estimates of these two quantities. Plot the distribution of your estimates, and describe these in words.
+
+* tmax as the response & tmin and prcp as the predictors
+
+```{r q2 bootstrap}
+# Start with a lil function
+boot_sample = function(df) {
+  
+  sample_frac(df, replace = TRUE)
+  
+}
+
+# Draw 5000 samples and analyze them
+# Do the lm fit.
+boot_results = 
+  tibble(strap_number = 1:5000) |> 
+  mutate(
+    strap_sample = map(strap_number, \(i) boot_sample(weather_df)),
+    models = map(strap_sample, \(df) lm(tmax ~ tmin + prcp, data = df)),
+    results = map(models, broom::tidy),
+    r_squared = map_dbl(models, \(model) summary(model)$r.squared)
+  ) |> 
+  select(strap_number, results,r_squared) |> 
+  unnest(results)
+
+# try to summarize these results – get log(beta1_hat * beta2_hat) & r_squared
+boot_results2 = 
+  boot_results |>
+  group_by(term) |> 
+  select(strap_number, term, estimate, r_squared) |>
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  mutate(
+    log_beta = log(tmin * prcp)
+  )
+boot_results2
+
+# look at the distribution of tmin
+boot_results2 |> 
+  ggplot(aes(x = tmin)) + 
+  geom_density() +
+  xlab("tmin estimate") +
+  ylab("strap number") +
+  ggtitle("The distribution of tmin in boot result")
+ggsave("The distribution of tmin in boot result for problem 2.jpg")
+
+# look at the distribution of prcp
+boot_results2 |> 
+  ggplot(aes(x = prcp)) + 
+  geom_density() +
+  xlab("prcp estimate") +
+  ylab("strap number") +
+  ggtitle("The distribution of prcp in boot result")
+ggsave("The distribution of prcp in boot result for problem 2.jpg")
+
+# look at the distribution of log(beta1*beta2)
+boot_results2 |> 
+  ggplot(aes(x = log_beta)) + 
+  geom_density() +
+  xlab("log(beta1*beta2)") +
+  ylab("strap number") +
+  ggtitle("The distribution of log(beta1*beta2) in boot result")
+ggsave("The distribution of log(beta1*beta2) in boot result for problem 2.jpg")
+
+# look at the distribution of r squared
+boot_results2 |> 
+  ggplot(aes(x = r_squared)) + 
+  geom_density() +
+  xlab("R squared") +
+  ylab("strap number") +
+  ggtitle("The distribution of R squared in boot result")
+ggsave("The distribution of R squared in boot result for problem 2.jpg")
+```
+
+**The distribution for tmin is symmetric and unimodal, centered around 1.00, with estimates ranging roughly from 0.95 to 1.05. This suggests that the bootstrap method produced a reliable estimate for tmin with a narrow spread and precision.**
+
+**The distribution for prcp is bimodal, indicating two different modes of behavior or relationships between prcp and tmax within the dataset. The presence of bimodality in the bootstrap distribution could be indicative of a non-linear relationship**
+
+**The distribution for log(beta1 * beta2) is sharply peaked and asymmetric, which is left skewed. The long tail stretching toward larger negative values shows that there are a few bootstrap samples where the product of the coefficients is very small.**
+
+**The distribution for R squared is a unimodal, nearly symmetrical shape. It is centered around a value slightly less than 0.925, suggesting that most of the bootstrap models have a high proportion of variance explained. The peak's sharpness indicates consistency across bootstrap samples.**
+
+Using the 5000 bootstrap estimates, identify the 2.5% and 97.5% quantiles to provide a 95% confidence interval for r̂ 2 and log(β̂ 1 * β̂ 2). 
+
+```{r q2 CI}
+# The fraction of valid log
+valid_log =
+  boot_results2 |> 
+  drop_na() 
+fraction = nrow(valid_log)/5000
+fraction
+
+# construct a CI for log(beta1*beta2)
+boot_results2 |> 
+  drop_na() |> 
+  summarize(
+    ci_lower = quantile(log_beta, 0.025),
+    ci_upper = quantile(log_beta, 0.975),
+  )
+
+# construct a CI for r squared
+boot_results2 |> 
+  summarize(
+    ci_lower = quantile(r_squared, 0.025),
+    ci_upper = quantile(r_squared, 0.975)
+  )
+```
+
+**There is only `r fraction` of dataset can be used for log(beta1 * beta2).**
+
+## Problem 3
+
+```{r q3 data cleaning}
+# Load and clean the data for regression analysis
+birthweight <- read_csv("birthweight.csv") |>
+  mutate(
+    babysex = recode(babysex, "1" = "male", "2" = "female"),
+    frace = recode(frace, "1" = "White", "2" = "Black", "3" = "Asian", "4" = "Puerto Rican", "8" = "Other", "9" = "Unknown"),
+    mrace = recode(mrace, "1" = "White", "2" = "Black", "3" = "Asian", "4" = "Puerto Rican", "8" = "Other"),
+    malform = recode(malform, "0" = "absent", "1" = "present")
+  ) |>
+  drop_na()
+```
+
+Propose a regression model for birthweight. This model may be based on a hypothesized structure for the factors that underly birthweight, on a data-driven model-building process, or a combination of the two. Describe your modeling process and show a plot of model residuals against fitted values – use add_predictions and add_residuals in making this plot.
+
+```{r q3 model1}
+# Propose a regression model for birthweight
+model1 <- lm(bwt ~ ., data = birthweight)
+summary(model1)
+
+birthweight_df <- birthweight |> 
+  add_predictions(model1) |> 
+  add_residuals(model1)
+
+# Plotting residuals against fitted values
+ggplot(birthweight_df, aes(x = pred, y = resid)) + 
+  geom_point() + 
+  geom_hline(yintercept = 0, color = "red") +
+  xlab("Fitted Values") +
+  ylab("Residuals")
+```
+
+**There are several variables are insignificant such as fincome, frace, malformpresent, menarche, mheight, and mrace since the p value is greater than 0.05. For variable pnumlbw, pnumsga, and wtgain produces NA, which implies the independence relationship with birthweitght.**
+
+* One using length at birth and gestational age as predictors (main effects only)
+
+```{r q3 model2}
+model2 <- lm(bwt ~ gaweeks + blength, data = birthweight)
+summary(model2)
+```
+
+* One using head circumference, length, sex, and all interactions (including the three-way interaction) between these
+
+```{r q3 model3}
+model3 <- lm(bwt ~ bhead + blength + babysex + bhead * blength + bhead * babysex + blength * babysex, 
+             data = birthweight)
+summary(model3)
+```
+
+Make this comparison in terms of the cross-validated prediction error; use crossv_mc and functions in purrr as appropriate.
+
+```{r comparsion cv}
+set.seed(123)  
+# Do the train / test split
+train = sample_n(birthweight, size = 80)
+train
+test = anti_join(birthweight, train)
+test
+
+# RMSE on Training and Testing Data
+rmse_train1 = rmse(model1, train)
+rmse_train2 = rmse(model2, train)
+rmse_train3 = rmse(model3, train)
+rmse_test1 = rmse(model1, test)
+rmse_test2 = rmse(model2, test)
+rmse_test3 = rmse(model3, test)
+
+# Output RMSE results
+rmse_train1; rmse_train2; rmse_train3;
+rmse_test1; rmse_test2; rmse_test3
+```
+
+```{r modelr cv}
+# Use modelr for CV
+cv_df = 
+  birthweight |> 
+  crossv_mc(n = 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+cv_df |> pull(train) |> nth(3) |> as_tibble()
+
+# Apply each model to all training datasets, and evaluate on all testing datasets.
+cv_results =
+  cv_df |> 
+  mutate(
+    model1 = map(train, \(df) model1),
+    model2 = map(train, \(df) model2),
+    model3 = map(train, \(df) model3)
+  ) |> 
+  mutate(
+    rmse_model1 = map2_dbl(model1, test, \(mod, df) rmse(mod, df)),
+    rmse_model2 = map2_dbl(model2, test, \(mod, df) rmse(mod, df)),
+    rmse_model3 = map2_dbl(model3, test, \(mod, df) rmse(mod, df))
+  )
+
+cv_results |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model_type",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) |> 
+  group_by(model_type) |> 
+  summarize(m_rmse = mean(rmse))
+
+cv_results |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model_type",
+    values_to = "rmse",
+    names_prefix = "rmse_"
+  ) |> 
+  ggplot(aes(x = model_type, y = rmse)) +
+  geom_violin()
+
+ggsave("Violin distribution of rmse for 3 models.jpg")
+```
+
+**The violin plot illustrates the distribution of root mean square error (RMSE) for three predictive models. Model 1's RMSE distribution is narrow and concentrated, indicating consistent performance with lower errors. Model 2 shows bimodal distribution, suggesting more variability and higher errors. Model 3 presents a similar distribution with model1 but slightly narrower and higher RMSE. As a result, Model 1 is the most reliable predictions with the smallest errors.**

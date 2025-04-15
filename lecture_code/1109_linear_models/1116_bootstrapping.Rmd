@@ -1,0 +1,228 @@
+---
+title: "1116_bootstrapping"
+author: "Ze Li"
+date: "2023-11-16"
+output: github_document
+---
+
+```{r, include = FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
+```
+
+Load key packages.
+
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+library(modelr)
+
+set.seed(1)
+```
+
+
+
+## Generate a relevant example
+
+
+```{r}
+n_samp = 250
+
+sim_df_const = 
+  tibble(
+    x = rnorm(n_samp, 1, 1), 
+    error = rnorm(n_samp, 0, 1),
+    y = 2 + 3 * x + error
+  )
+
+sim_df_nonconst = 
+  sim_df_const |> 
+  mutate(
+    error = error * .75 * x,
+    y = 2 + 3 * x + error
+  )
+
+sim_df_nonconst |> 
+  ggplot(aes(x = x, y = y)) + geom_point()
+
+
+```
+
+
+fit some linear models
+
+```{r}
+sim_df_const |> 
+  lm(y ~ x, data = _) |> 
+  broom::tidy()
+
+sim_df_nonconst |> 
+  lm(y ~ x, data = _) |> 
+  broom::tidy()
+
+```
+
+
+## Draw and analyze a bootstrap sample
+
+Start with a lil function
+
+```{r}
+boot_sample = function(df) {
+  
+  sample_frac(df, replace = TRUE)
+  
+}
+```
+
+Let's see how this works
+
+```{r}
+sim_df_nonconst |> 
+  boot_sample() |> 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point(alpha = .5) + 
+  stat_smooth(method = "lm")
+```
+
+
+## Draw a lot of samples and analyze them
+
+
+```{r}
+boot_straps = 
+  tibble(strap_number = 1:1000) |> 
+  mutate(
+    strap_sample = map(strap_number, \(i) boot_sample(sim_df_nonconst))
+  )
+
+boot_straps |> 
+  pull(strap_sample) |> 
+  nth(2) |> 
+  arrange(x)
+```
+
+Now do the `lm` fit.
+
+```{r}
+boot_results = 
+  boot_straps |> 
+  mutate(
+    models = map(strap_sample, \(df) lm(y ~ x, data = df)),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(strap_number, results) |> 
+  unnest(results)
+```
+
+
+try to summarize these results -- get a bootstrap SE
+
+```{r}
+boot_results |> 
+  group_by(term) |> 
+  summarize(
+    se = sd(estimate)
+  )
+```
+
+look at the distribution
+
+```{r}
+boot_results |> 
+  filter(term == "x") |> 
+  ggplot(aes(x = estimate)) + 
+  geom_density()
+```
+
+
+
+can I construct a CI
+
+```{r}
+boot_results |> 
+  group_by(term) |> 
+  summarize(
+    ci_lower = quantile(estimate, 0.025),
+    ci_upper = quantile(estimate, 0.975)
+  )
+```
+
+
+
+## Airbnb
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb =
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group
+  ) |> 
+  filter(borough != "Staten Island") |> 
+  drop_na(price, stars) |> 
+  select(price, stars, room_type, borough)
+
+```
+
+let's fit a regression of `price` on other variables and look at residuals
+
+
+```{r}
+airbnb_fit = 
+  nyc_airbnb |> 
+  lm(price ~ stars + room_type + borough, data = _)
+```
+
+
+residuals!!
+
+```{r}
+nyc_airbnb |> 
+  modelr::add_residuals(airbnb_fit) |> 
+  ggplot(aes(x = stars, y = resid)) + 
+  geom_point()
+```
+
+run a bootstrap on this whole thing to get estimates for the effect of `stars` on `price`
+
+```{r}
+manhattan_df = 
+  nyc_airbnb |> 
+  filter(borough == "Manhattan")
+
+
+boot_results = 
+  tibble(strap_number = 1:1000) |> 
+  mutate(
+    strap_sample = map(strap_number, \(i) boot_sample(manhattan_df)),
+    models = map(strap_sample, \(df) lm(price ~ stars + room_type, data = df)),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(strap_number, results) |> 
+  unnest(results)
+
+boot_results |> 
+  filter(term == "stars") |> 
+  ggplot(aes(x = estimate)) +
+  geom_density()
+```

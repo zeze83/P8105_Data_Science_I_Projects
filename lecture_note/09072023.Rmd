@@ -1,0 +1,65 @@
+---
+title: "09072023"
+author: "Ze Li"
+date: "2023-09-07"
+output: pdf_document
+---
+packages
+```{r}
+library(tidyverse)
+# command + return = run
+3 + 7
+(18/3+7)^(2-1.4)
+```
+
+variable assignments
+```{r}
+x = 3 + 7
+y = c(1,3,7,18)
+
+x+y
+
+x = runif(20)
+x <- runif(20)
+# ?runif
+x = runif(n=20,min=0,max=17)
+x = runif(20,0,17)
+mean(x)
+```
+
+Tibble - data frame that has the tbl_df class.
+```{r}
+example_df=
+  tibble(
+    vec_numeric = 5:8, # from 5 to 8
+    vec_char = c('My','name','is','Ze'),
+    vec_logical = c(TRUE,TRUE,FALSE,TRUE),
+  )
+example_df
+example_df$vec_numeric
+```
+
+Tibble plot
+```{r}
+plot_df = 
+  tibble(
+    x = rnorm(1000,sd=0.5),
+    y = 1 + 2*x + rnorm(1000),
+    y2 = 1 + 2*x + 4*x^2 + rnorm(1000)
+  )
+plot_df
+```
+
+ggplot
+```{r}
+ggplot(plot_df, aes(x=x)) + geom_histogram()
+ggplot(plot_df, aes(x=x,y=y2)) + geom_point()
+```
+In environment
+```{r}
+ls()
+# rm(list = ls()) 
+# remove all in the environment
+```
+
+

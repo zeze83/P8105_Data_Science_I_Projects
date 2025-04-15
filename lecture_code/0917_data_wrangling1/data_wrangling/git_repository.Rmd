@@ -1,0 +1,24 @@
+---
+title: "git"
+author: "Ze Li"
+date: "2023-09-22"
+output: github_document
+---
+
+# (commit > pull > push)
+
+A key step is the creation of a Personal Access Token. 
+
+This will take you to GitHub, where you’ll establish scopes (recommended scopes “repo”, “user”, and “workflow” will be selected by default), name your token (mine is “GH_Macbook”), and say how long this token will last. Copy your token or keep this page open. Once you’ve set up your PAT and try to push, RStudio may prompt you for your GitHub username and password; provide your new PAT, and you’re be all set. 
+
+```{r}
+usethis::create_github_token()
+
+gitcreds::gitcreds_set()
+```
+
+Create an R Project with a reasonable name and path (via `usethis::create_project()`)
+Turn on version control for the project using git (via `usethis::use_git()`)
+Optionally, create remote repository (via `usethis::use_github()`)
+Keep everything related to the analysis – data inputs, scripts, reports, output – in the directory, and use R Markdown as much as possible
+Keep track of changes using version control (save, commit, push)

@@ -1,0 +1,246 @@
+---
+title: "p8105_hw2_zl2746"
+author: "Ze Li"
+date: "2023-09-27"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+library(readr)
+library(readxl)
+```
+
+## Problem 1
+
+### Step 1. 
+
+Use `separate()` to break up the variable `mon` into integer variables `year`, `month`, and `day`; 
+
+replace month number with month name; 
+
+create a `president` variable taking values `gop` and `dem`, and remove `prez_dem` and `prez_gop`; 
+
+and remove the `day` variable.
+
+```{r p1step1}
+month_df = 
+  read_csv("fivethirtyeight_datasets/pols-month.csv") |>
+  janitor::clean_names()
+  
+month_sep_df =
+  separate(month_df,col=mon,c("year","month","day"),sep="-") |>
+  mutate(
+    year = as.integer(year),
+    month = as.integer(month),
+    day = as.integer(day),
+    month = month(month, label = TRUE),
+    #month_full = month(month, label = TRUE, abbr = FALSE)
+    president = recode(prez_gop, "0" = "dem", "1" = "gop", "2" = "gop")
+  ) |>
+  select(-starts_with("day"))
+```
+
+### Step 2. 
+
+Clean the data in snp.csv using a similar process to the above. 
+
+For consistency across datasets, arrange according to year and month, and organize so that year and month are the leading columns.
+
+```{r p1step2}
+snp_df = 
+  read_csv("fivethirtyeight_datasets/snp.csv") |>
+  janitor::clean_names()
+
+snp_sep_df =
+  separate(snp_df,col=date,c("month","day","year"), sep="/") |>
+  mutate(
+    month = as.integer(month),
+    day = as.integer(day),
+    year = as.integer(year),
+    month = month(month, label = TRUE),
+    year = ifelse(year<16, year+2000, year+1900)
+  ) |>
+  select(-starts_with("day")) |>
+  relocate(year)
+```
+
+### Step 3. 
+
+Tidy the unemployment data so that it can be merged with the previous datasets. 
+
+This process will involve switching from “wide” to “long” format; ensuring that key variables have the same name; 
+
+and ensuring that key variables take the same values.
+
+```{r p1step3}
+unem_df = 
+  read_csv("fivethirtyeight_datasets/unemployment.csv") |>
+  pivot_longer(
+    Jan:Dec, 
+    names_to = "month",
+    values_to = "unemployment"
+  ) |> 
+  rename(year = Year) |> 
+  select(year, month, unemployment) #|>
+```
+
+### Step 4. 
+
+Join the datasets by merging snp into pols, and merging unemployment into the result. 
+
+```{r p1step4}
+cdata_p1 = 
+  left_join(month_sep_df, snp_sep_df) |>
+  left_join(x = _, y = unem_df) 
+
+```
+
+### Step 5.
+
+Write a short paragraph about these datasets. Explain briefly what each dataset contained, and describe the resulting dataset (e.g. give the dimension, range of years, and names of key variables).
+
+The `pol_month` data has `r nrow(month_sep_df)` observations and `r ncol(month_sep_df)` variables and tells us about the party affiliation distribution (democrat or republican) for governors and senators for a given year from years `r range(month_sep_df$year)[1]` to `r range(month_sep_df$year)[2]`. It also tells us whether the sitting president was a democrat or republican. 
+
+The `snp` data has `r nrow(snp_sep_df)` observations and `r ncol(snp_sep_df)` variables, ranging from years `r range(snp_sep_df$year)[1]` to `r range(snp_sep_df$year)[2]`. 
+
+The `unemployment` data has `r nrow(unem_df)` observations and `r ncol(unem_df)` variables ranging from years `r range(unem_df$year)[1]` to `r range(unem_df$year)[2]`. 
+In Januarys in or after 1975 in which a democrat was president, the **average unemployment rate was `r filter(cdata_p1, month == "Jan", year >= 1975, president == "dem") |> pull(unemployment) |> mean() |> round(2)`**.  
+
+The average unemployment rate over the same time period in which a republican was president was `r filter(cdata_p1, month == "Jan", year >= 1975, president == "gop") |> pull(unemployment) |> mean() |> round(2)`.
+
+
+## Problem 2
+
+```{r problem2}
+Mr.Trash_df = 
+  read_excel("202309 Trash Wheel Collection Data.xlsx",sheet = 1, range = "A2:N586") |>
+  janitor::clean_names() |>
+  mutate(
+    homes_powered = (weight_tons*500)/30
+  ) |>
+  drop_na(dumpster) |>
+  add_column(type = "Mr. Trash")
+
+Prof.Trash_df = 
+  read_excel("202309 Trash Wheel Collection Data.xlsx",sheet = 2) |>
+  janitor::clean_names() |>
+  mutate(
+    homes_powered = (weight_tons*500)/30,
+    year = as.character(year)
+  ) |>
+  drop_na(dumpster) |>
+  add_column(type = "Professor Trash") 
+
+G.Trash_df = 
+  read_excel("202309 Trash Wheel Collection Data.xlsx",sheet = 4) |>
+  janitor::clean_names() |>
+  mutate(
+    homes_powered = (weight_tons*500)/30,
+    year = as.character(year)
+  ) |>
+  drop_na(dumpster) |>
+  add_column(type = "Gwynnda Trash")
+
+cdata_p2 = 
+  bind_rows(Mr.Trash_df, Prof.Trash_df) |>
+  bind_rows(x = _, y = G.Trash_df)
+```
+
+Write a paragraph about these data; you are encouraged to use inline R. Be sure to note the number of observations in the resulting dataset, and give examples of key variables.
+
+The `Mr.Trash` data has `r nrow(Mr.Trash_df)` observations and `r ncol(Mr.Trash_df)` variables and tells us about the  information on the dumpter number, date of collection, amount of total litter and litter type. By the `home powered note`, the `homes_powered` is calculated using trash `weight_tons`. On `r Mr.Trash_df$date[1]`, dumpster `r Mr.Trash_df$dumpster[1]` has `r Mr.Trash_df$weight_tons[1]` tons of trash, which could power average `r Mr.Trash_df$homes_powered[1]` homes powered.
+
+The `Prof.Trash` data has `r nrow(Prof.Trash_df)` observations and `r ncol(Prof.Trash_df)` variables and tells us about the  information on the dumpter number, date of collection, amount of total litter and litter type. On `r Prof.Trash_df$date[1]`, dumpster `r Prof.Trash_df$dumpster[1]` has `r Prof.Trash_df$weight_tons[1]` tons of trash, which could power average `r Prof.Trash_df$homes_powered[1]` homes powered.
+
+The `G.Trash` data has `r nrow(G.Trash_df)` observations and `r ncol(G.Trash_df)` variables and tells us about the  information on the dumpter number, date of collection, amount of total litter and litter type. On `r G.Trash_df$date[1]`, dumpster `r G.Trash_df$dumpster[1]` has `r G.Trash_df$weight_tons[1]` tons of trash, which could power average `r G.Trash_df$homes_powered[1]` homes powered.
+
+The combined data `cdata_p2` has `r nrow(cdata_p2)` observations and `r ncol(cdata_p2)` variables.
+
+For available data, what was the total weight of trash collected by Professor Trash Wheel? 
+
+The total weight of trash collected by Professor Trash Wheel is `r sum(Prof.Trash_df$weight_tons)` tons.
+
+What was the total number of cigarette butts collected by Gwynnda in July of 2021?
+
+The total number of cigarette butts collected by Gwynnda in July of 2021 is `r sum(filter(G.Trash_df, month == "July" & year == 2021)$cigarette_butts)`.
+
+## Problem 3
+
+### Step 1. 
+
+Import, clean, and tidy the dataset of baseline demographics. 
+
+Ensure that sex and APOE4 carrier status are appropriate encoded (i.e. not numeric), and remove any participants who do not meet the stated inclusion criteria (i.e. no MCI at baseline). 
+
+```{r p3step1}
+base_df = 
+  read_csv("data_mci/MCI_baseline.csv", skip = 1) |>
+  janitor::clean_names() |>
+  mutate(
+    sex = recode(sex, "0" = "female", "1" = "male"),
+    apoe4 = recode(apoe4, "0" = "non-apoe4 carrier", "1" = "apoe4 carrier"),
+    age_at_onset = ifelse(age_at_onset == '.', NA, age_at_onset)
+  ) 
+
+base_mci_df =
+  base_df |>
+  filter(current_age < age_at_onset | is.na(age_at_onset)) 
+```
+
+Discuss important steps in the import process and relevant features of the dataset.
+
+Because the first line is the description about each column variables, skipped 
+the first line when importing csv dataset. In addition, changed sex and apoe4 from
+numeric into charater type. The most important step to filter any participants who do not meet the stated inclusion criteria.
+
+The `base_df` data is the total recruited dataset, having `r nrow(base_df)` observations and `r ncol(base_df)` variables and tells us about `r colnames(base_df)`.
+
+The `base_mci_df` data has `r nrow(base_mci_df)` observations and `r ncol(base_mci_df)` variables and tells us about similar information with `base_df` but about people who has no MCI at baseline.
+
+There are `r nrow(base_df)` were recruited, and of `r nrow(base_mci_df)` these develop MCI.
+
+The average baseline age is `r mean(base_mci_df$current_age)`.
+
+`r as.integer(count(filter(base_mci_df, sex == "female" & apoe4 == "apoe4 carrier")))/as.integer(count(filter(base_mci_df, sex == "female")))*100`% proportion of women in the study are APOE4 carriers.
+
+### Step 2. 
+
+Similarly, import, clean, and tidy the dataset of longitudinally observed biomarker values; 
+
+```{r p3step2}
+amyloid = read_csv("data_mci/mci_amyloid.csv", skip = 1) |>
+  janitor::clean_names() |>
+  rename(
+    id = study_id,
+    time_0 = baseline
+    ) |>
+  pivot_longer(
+    time_0:time_8, 
+    names_to = "timeperiod",
+    values_to = "time in years elapsed"
+  ) 
+```
+
+Comment on the steps on the import process and the features of the dataset.
+
+Similarly, skipped the first line description to import csv data. Furthermore, switching from “wide” to “long” format for 5 types of time period and time (in years) elapsed since the study baseline to the visit where biomarker Amyloid _ 42/40 ratio was measured.
+
+The `amyloid` data has `r nrow(amyloid)` observations and `r ncol(amyloid)` variables and tells us about `r colnames(amyloid)`.
+
+```{r}
+diffdata1 =
+  anti_join(base_mci_df, amyloid)
+
+diffdata2 =
+  anti_join(amyloid, base_mci_df)
+
+cdata_p3 = 
+  inner_join(base_mci_df, amyloid)
+```
+
+Matching `baseline` data with `amyloid` data, there are `r nrow(diffdata1)` data appear in only the baseline.
+
+Matching `amyloid` data with `baseline` data, there are `r nrow(diffdata2)` data appear in only the amyloid.
+
+The combined dataset has `r nrow(cdata_p3)` observations and `r ncol(cdata_p3)` variables and tells us about information about `r colnames(cdata_p3)`. 

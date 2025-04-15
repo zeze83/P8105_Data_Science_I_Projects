@@ -1,0 +1,96 @@
+---
+title: "1128_shinydashboard"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+
+library(tidyverse)
+library(p8105.datasets)
+library(plotly)
+
+data("nyc_airbnb")
+
+nyc_airbnb =
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  select(
+    borough = neighbourhood_group, neighbourhood, 
+    stars, price, room_type, lat, long)
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+borough_vec = nyc_airbnb |> pull(borough) |> unique()
+
+selectInput(
+  inputId = "borough_choice",
+  label = h3("Select Borough"),
+  choices = borough_vec,
+  selected = "Manhattan"
+)
+
+sliderInput(
+  inputId = "price_range",
+  label = h3("Select a price range"),
+  min = 50, max = 1000,
+  value = c(100, 400)
+)
+
+
+room_vec = nyc_airbnb |> pull(room_type) |> unique()
+
+radioButtons(
+  inputId = "room_type",
+  label = h3("Select room type"),
+  choices = room_vec,
+  select = "Entire home/apt"
+)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A
+
+```{r}
+renderPlotly({
+  nyc_airbnb |> 
+    filter(
+      borough == input[["borough_choice"]], 
+      price < input[["price_range"]][2], 
+      price > input[["price_range"]][1], 
+      room_type == input[["room_type"]]
+    ) |> 
+    plot_ly(x = ~lat, y = ~long, type = "scatter", 
+            mode = "markers", color = ~price)
+})
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B
+
+```{r}
+renderText({
+  input[["price_range"]]
+})
+
+```
+
+### Chart C
+
+```{r}
+renderText({
+  input[["room_type"]]
+})
+
+```

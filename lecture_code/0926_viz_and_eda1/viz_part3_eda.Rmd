@@ -1,0 +1,181 @@
+---
+title: "EDA: Numeric summaries"
+author: "Ze Li"
+date: "2023-10-03"
+output: github_document
+---
+
+```{r}
+library(tidyverse)
+
+knitr::opts_chunk$set(
+  fig.width = 6,
+  fig.asp = .6,
+  out.width = "90%"
+)
+```
+
+Get the data for plotting today.
+
+```{r}
+weather_df = 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728", "USW00022534", "USS0023B17S"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2021-01-01",
+    date_max = "2022-12-31") |>
+  mutate(
+    name = recode(
+      id, 
+      USW00094728 = "CentralPark_NY", 
+      USW00022534 = "Molokai_HI",
+      USS0023B17S = "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10,
+    month = lubridate::floor_date(date, unit = "month")) |> #jan 21 -> jan 1
+  select(name, id, everything())
+```
+
+
+
+## Initial numeric work
+
+```{r}
+weather_df |>
+  ggplot(aes(x = prcp)) +
+  geom_histogram()
+
+# heavy skew
+```
+
+```{r}
+weather_df |>
+  filter(prcp > 1000)
+# google - storm/ volcano/ hurrican
+```
+
+```{r}
+weather_df |>
+  filter(tmax >= 20, tmax <= 30) |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point()
+
+```
+
+## Grouping
+
+```{r}
+weather_df |>
+  group_by(name,month)
+```
+
+## Counting
+
+```{r}
+weather_df |>
+  group_by(name,month) |>
+  summarize(n_obs = n())
+```
+
+```{r}
+weather_df |>
+  group_by(month) |>
+  summarize(n_obs = n())
+```
+
+```{r}
+weather_df |>
+  count(name, name = "n_obs") 
+```
+
+```{r}
+weather_df |>
+  count(name, month) |>
+  pivot_wider(
+    names_from = name,
+    values_from =  n
+  )
+```
+
+
+
+## General summaries
+
+```{r}
+weather_df |>
+  group_by(name, month) |>
+  summarize(
+    mean_tmax = mean(tmax, na.rm = TRUE),
+    median_tmax = median(tmax, na.rm = TRUE),
+    sd_tmax = sd(tmax, na.rm = TRUE)
+  )
+```
+
+```{r}
+weather_df |>
+    group_by(name, month) |>
+  summarize(
+    mean_tmax = mean(tmax, na.rm = TRUE)
+  ) |>
+  ggplot(aes(x = month, y = mean_tmax, color=name)) +
+  geom_point() +
+  geom_line()
+```
+
+```{r}
+weather_df |>
+  group_by(name, month) |>
+  summarize(mean_tmax = mean(tmax, na.rm = TRUE)) |>
+  pivot_wider(
+    names_from = name,
+    values_from =  mean_tmax
+  ) |>
+  knitr::kable(digits = 2)
+```
+
+
+
+## Grouped mutate
+
+```{r}
+weather_df |>
+  group_by(name) |>
+  mutate(mean_tmax = mean(tmax, na.rm = TRUE))
+```
+
+```{r}
+weather_df |>
+  group_by(name) |>
+  mutate(
+    mean_tmax = mean(tmax, na.rm = TRUE),
+    centered_tmax = tmax - mean_tmax) |>
+  ggplot(aes(x = date, y = centered_tmax, color=name)) +
+  geom_point() 
+```
+
+```{r}
+#hottest in each month
+weather_df |> 
+  group_by(name,month) |> 
+  mutate(tmax_rank = min_rank(desc(tmax))) |> 
+  filter(tmax_rank<2)
+```
+
+## lags: compare with data from yesterday 
+
+```{r}
+weather_df |>
+  group_by(name) |>
+  mutate(
+    yesterday_tmax=lag(tmax),
+    temp_change = tmax - lag(tmax,3))
+```
+
+```{r}
+# group summary
+weather_df |> 
+  group_by(name) |> 
+  mutate(temp_change = tmax - lag(tmax)) |>
+  summarize(sd_temp_change = sd(temp_change, na.rm=TRUE))
+```
+
